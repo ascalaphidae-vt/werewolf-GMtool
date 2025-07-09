@@ -166,7 +166,17 @@ def main() -> None:
                     f"{row['order']}.{row['name']}" for row in st.session_state.table
                 )
                 components.html(
-                    f"<script>navigator.clipboard.writeText({json.dumps(text)});</script>",
+                    f"""
+                    <script>
+                    const text = {json.dumps(text)};
+                    const el = document.createElement('textarea');
+                    el.value = text;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    </script>
+                    """,
                     height=0,
                 )
                 st.success("発言順をコピーしました")
@@ -176,7 +186,17 @@ def main() -> None:
                     f"{row['order']}.{row['name']}-{row.get('role')}" for row in st.session_state.table
                 )
                 components.html(
-                    f"<script>navigator.clipboard.writeText({json.dumps(text)});</script>",
+                    f"""
+                    <script>
+                    const text = {json.dumps(text)};
+                    const el = document.createElement('textarea');
+                    el.value = text;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    </script>
+                    """,
                     height=0,
                 )
                 st.success("役職をコピーしました")
