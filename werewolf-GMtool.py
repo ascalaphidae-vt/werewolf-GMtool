@@ -159,47 +159,32 @@ def main() -> None:
         st.session_state.prophecy = random.choice(choices) if choices else ""
 
     if st.session_state.table:
+        order_text = "\n".join(
+            f"{row['order']}.{row['name']}" for row in st.session_state.table
+        )
+        role_text = "\n".join(
+            f"{row['order']}.{row['name']}-{row.get('role')}" for row in st.session_state.table
+        )
+
         copy_col1, copy_col2 = st.columns(2)
         with copy_col1:
-            if st.button("発言順をコピーする"):
-                text = "\n".join(
-                    f"{row['order']}.{row['name']}" for row in st.session_state.table
-                )
-                components.html(
-                    f"""
-                    <script>
-                    const text = {json.dumps(text)};
-                    const el = document.createElement('textarea');
-                    el.value = text;
-                    document.body.appendChild(el);
-                    el.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(el);
-                    </script>
-                    """,
-                    height=0,
-                )
-                st.success("発言順をコピーしました")
+            components.html(
+                f"""
+                <button onclick="navigator.clipboard.writeText({json.dumps(order_text)}); alert('発言順をコピーしました');">
+                    発言順をコピーする
+                </button>
+                """,
+                height=40,
+            )
         with copy_col2:
-            if st.button("役職をコピーする"):
-                text = "\n".join(
-                    f"{row['order']}.{row['name']}-{row.get('role')}" for row in st.session_state.table
-                )
-                components.html(
-                    f"""
-                    <script>
-                    const text = {json.dumps(text)};
-                    const el = document.createElement('textarea');
-                    el.value = text;
-                    document.body.appendChild(el);
-                    el.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(el);
-                    </script>
-                    """,
-                    height=0,
-                )
-                st.success("役職をコピーしました")
+            components.html(
+                f"""
+                <button onclick="navigator.clipboard.writeText({json.dumps(role_text)}); alert('役職をコピーしました');">
+                    役職をコピーする
+                </button>
+                """,
+                height=40,
+            )
 
     # --- 表示 ---
     if st.session_state.table:
