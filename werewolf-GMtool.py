@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""Streamlit app for assigning roles in a Werewolf game."""
+"""Streamlit app for assigning roles in a Werewolf game (役職編集つき)."""
 
 import random
 import pandas as pd
@@ -13,11 +13,17 @@ def main() -> None:
 
     DEFAULT_NUM_PLAYERS = 9
 
+    # ─────────────────────────────────
+    # Session State 初期化
+    # ─────────────────────────────────
     def init_state() -> None:
         if "num_players" not in st.session_state:
             st.session_state.num_players = DEFAULT_NUM_PLAYERS
         if "roles" not in st.session_state:
             st.session_state.roles = []
+        # 役職編集用：[{ "No": 1, "role": "人狼A", "omen_exclude": True }, ...]
+        if "editable_roles" not in st.session_state:
+            st.session_state.editable_roles = []
         if "players" not in st.session_state:
             st.session_state.players = ["" for _ in range(13)]
         if "table" not in st.session_state:
@@ -33,11 +39,19 @@ def main() -> None:
 
     init_state()
 
+    # タイトル＋Xリンク（控えめサイズ）
     st.title("人狼GM補助ツール")
+    st.markdown(
+        '<div style="font-size:0.9rem; opacity:0.8; margin-top:-0.6rem;">by '
+        '<a href="https://x.com/Ascalaphidae" target="_blank">あすとらふぃーだ</a></div>',
+        unsafe_allow_html=True,
+    )
 
+    # 全消し
     if st.button("入力内容の初期化"):
         st.session_state.num_players = DEFAULT_NUM_PLAYERS
         st.session_state.roles = []
+        st.session_state.editable_roles = []
         st.session_state.players = ["" for _ in range(13)]
         st.session_state.table = []
         st.session_state.prophecy = ""
@@ -49,6 +63,9 @@ def main() -> None:
         else:
             st.experimental_rerun()
 
+    # ─────────────────────────────────
+    # 1. 参加者数
+    # ─────────────────────────────────
     st.subheader("1. 参加者数の入力 (9～11人)")
     st.session_state.num_players = st.number_input(
         "参加者数",
@@ -58,6 +75,9 @@ def main() -> None:
         value=st.session_state.num_players,
     )
 
+    # ─────────────────────────────────
+    # 役職プリセット
+    # ─────────────────────────────────
     def set_role_table(num: int):
         if num == 9:
             return [
@@ -100,13 +120,50 @@ def main() -> None:
             ]
         return []
 
+    # お告げ除外の初期値ルール
+    def default_omen_exclude(role: str) -> bool:
+        return role in {"人狼A", "人狼B", "人狼C", "占い"}
+
+    # ─────────────────────────────────
+    # 2. 役職テーブル決定 → 編集可能リスト化
+    # ─────────────────────────────────
     if st.button("役職テーブル決定"):
         st.session_state.roles = set_role_table(st.session_state.num_players)
+        st.session_state.editable_roles = [
+            {"No": i + 1, "role": r, "omen_exclude": default_omen_exclude(r)}
+            for i, r in enumerate(st.session_state.roles)
+        ]
 
+    # プリセットの確認表示
     if st.session_state.roles:
-        st.write("### 役職テーブル")
+        st.write("### 役職テーブル（プリセット）")
         st.write(st.session_state.roles)
 
+    # 編集可能リストUI（行ごとテキスト＋チェック）
+    if st.session_state.editable_roles:
+        st.write("### 役職テーブルを編集（行ごと）")
+        st.caption("※ 役職名は個別に編集できます。お告げ除外のチェックONは候補から除外します。")
+        new_list = []
+        for i, row in enumerate(st.session_state.editable_roles):
+            c1, c2, c3 = st.columns([0.5, 2.5, 1.5])
+            with c1:
+                st.number_input("No", value=row["No"], disabled=True, key=f"er_no_{i}")
+            with c2:
+                role_val = st.text_input("役職名", value=row["role"], key=f"er_role_{i}")
+            with c3:
+                ex_val = st.checkbox("お告げ除外", value=row["omen_exclude"], key=f"er_ex_{i}")
+            new_list.append({"No": i + 1, "role": role_val.strip(), "omen_exclude": ex_val})
+        st.session_state.editable_roles = new_list
+
+        # 現在の編集内容プレビュー
+        st.dataframe(
+            pd.DataFrame(st.session_state.editable_roles),
+            use_container_width=True,
+        )
+
+    # ─────────────────────────────────
+    # 3. 参加者名：一括入力
+    # ─────────────────────────────────
     st.subheader("3. 参加者名を一括入力")
     st.session_state.bulk_names = st.text_input(
         "カンマ区切りで入力",
@@ -118,6 +175,9 @@ def main() -> None:
             if idx < len(st.session_state.players):
                 st.session_state.players[idx] = name
 
+    # ─────────────────────────────────
+    # 4. 参加者名：個別入力（常時13枠）
+    # ─────────────────────────────────
     st.subheader("4. 参加者名の入力")
     for i in range(13):
         label = f"参加者{i+1}"
@@ -127,12 +187,15 @@ def main() -> None:
             key=f"player_{i}",
         )
 
+    # ─────────────────────────────────
+    # 発言順割り当て（乱数A）
+    # ─────────────────────────────────
     if st.button("発言順割り当て"):
         selected = st.session_state.players[: st.session_state.num_players]
         table = []
         for name in selected:
             rand_a = random.randint(1, 1000)
-            table.append({"name": name, "rand_a": rand_a})
+            table.append({"name": name if name else "", "rand_a": rand_a})
         table.sort(key=lambda x: x["rand_a"])
         for idx, row in enumerate(table, 1):
             row["order"] = f"{idx:02}"
@@ -140,19 +203,48 @@ def main() -> None:
             row["role"] = None
         st.session_state.table = table
 
-    if st.button("役職割り当て") and st.session_state.roles and st.session_state.table:
-        table = st.session_state.table
-        for row in table:
-            row["rand_b"] = random.randint(1, 2000)
-        table.sort(key=lambda x: x["rand_b"])
-        for idx, row in enumerate(table):
-            row["role"] = st.session_state.roles[idx]
-        st.session_state.table = table
+    # ─────────────────────────────────
+    # 役職割り当て（編集リストを参照）
+    # ─────────────────────────────────
+    if st.button("役職割り当て") and st.session_state.table:
+        # 役職のソースは「編集可能リスト」。未設定ならプリセットを利用。
+        if st.session_state.editable_roles:
+            role_source = [r["role"] for r in st.session_state.editable_roles]
+        else:
+            role_source = st.session_state.roles
 
-    if st.button("お告げ決定") and st.session_state.roles:
-        choices = [r for r in st.session_state.roles if not r.startswith("人狼") and r != "占い"]
-        st.session_state.prophecy = random.choice(choices) if choices else ""
+        # 行数チェック（人数と役職数のズレ防止）
+        if not role_source or len(role_source) != len(st.session_state.table):
+            st.error("役職テーブルの行数が参加者数と一致していません。『役職テーブル決定』→必要なら編集を調整してください。")
+        else:
+            table = st.session_state.table
+            for row in table:
+                row["rand_b"] = random.randint(1, 2000)
+            table.sort(key=lambda x: x["rand_b"])
+            for idx, row in enumerate(table):
+                row["role"] = role_source[idx]
+            st.session_state.table = table
 
+    # ─────────────────────────────────
+    # お告げ決定（編集リストのフラグで除外）
+    # ─────────────────────────────────
+    if st.button("お告げ決定"):
+        # 候補リストは編集可能リストの「omen_exclude == False」を採用
+        candidates = []
+        if st.session_state.editable_roles:
+            candidates = [r["role"] for r in st.session_state.editable_roles if not r["omen_exclude"]]
+        else:
+            # 編集機能が未使用なら、従来の除外ルール
+            if st.session_state.roles:
+                candidates = [r for r in st.session_state.roles if not (r.startswith("人狼") or r == "占い")]
+
+        st.session_state.prophecy = random.choice(candidates) if candidates else ""
+        if not candidates:
+            st.warning("お告げ候補がありません（お告げ除外にチェックを入れすぎていないか確認してね）")
+
+    # ─────────────────────────────────
+    # コピー用テキスト（読み取りのみ）
+    # ─────────────────────────────────
     if st.session_state.table:
         order_text = "\n".join(
             f"{row['order']}.{row['name']}" for row in st.session_state.table
@@ -174,6 +266,9 @@ def main() -> None:
         if st.session_state.role_copy_text:
             st.text_area("役職コピー用テキスト", st.session_state.role_copy_text, height=200)
 
+    # ─────────────────────────────────
+    # 表示
+    # ─────────────────────────────────
     if st.session_state.table:
         df = pd.DataFrame(
             [
