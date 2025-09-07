@@ -3,7 +3,7 @@ import pandas as pd
 from secrets import SystemRandom
 
 # ──────────────────────────────────────────────────────────
-#  人狼GMアシストツール  ver.0.3（役職編集B案 + 一括名前入力 + コピー用テキスト）
+#  人狼GMアシストツール  ver.0.3.1（役職編集B案 + 一括名前入力 + コピー用テキスト／並び固定＆改行修正）
 #  author: ChatGPT (o3)
 # ──────────────────────────────────────────────────────────
 #  機能概要
@@ -13,7 +13,7 @@ from secrets import SystemRandom
 #  4. 発言順割り当て（乱数A: 1〜1000）
 #  5. 役職割り当て（乱数B: 1〜2000, 乱数B 昇順で編集後テーブルからロール付与）
 #  6. お告げ決定（チェックONの役職を候補から除外してランダム選出）
-#  7. 最終テーブル表示 + コピー用テキスト（発言順/役職）
+#  7. 最終テーブル表示（常に発言順で表示） + コピー用テキスト（発言順/役職／改行）
 # ──────────────────────────────────────────────────────────
 
 rng = SystemRandom()
@@ -252,17 +252,29 @@ if st.button("お告げ決定", key="set_omen"):
 if st.session_state.omen:
     st.info(f"**お告げ先（役職）** : {st.session_state.omen}")
 
-# 7️⃣ 最終テーブル & コピー用テキスト
+# 7️⃣ 最終テーブル（常に発言順で表示） & コピー用テキスト
 st.subheader("最終テーブル")
-st.dataframe(st.session_state.df, use_container_width=True)
 
-if not st.session_state.df.empty and st.session_state.df["発言順"].iloc[0] != "":
-    # 現在の並び（発言順昇順）でコピー文面を作成
+# 表示は常に発言順で固定
+if not st.session_state.df.empty:
+    if (st.session_state.df["発言順"] != "").any():
+        df_view = st.session_state.df.sort_values("発言順").reset_index(drop=True)
+    else:
+        df_view = st.session_state.df.copy().reset_index(drop=True)
+    st.dataframe(df_view, use_container_width=True)
+
+# 発言順が全行に割り当て済みならコピー用テキストを生成できる
+if (
+    not st.session_state.df.empty
+    and st.session_state.df["発言順"].ne("").all()
+):
     df_sorted = st.session_state.df.sort_values("発言順").reset_index(drop=True)
-    order_text = "\\n".join(
+    order_text = "
+".join(
         f"{row['発言順']}.{row['参加者名']}" for _, row in df_sorted.iterrows()
     )
-    role_text = "\\n".join(
+    role_text = "
+".join(
         f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}"
         for _, row in df_sorted.iterrows()
     )
@@ -278,4 +290,3 @@ if not st.session_state.df.empty and st.session_state.df["発言順"].iloc[0] !=
         st.text_area("発言順コピー用テキスト", st.session_state.order_copy_text, height=150)
     if st.session_state.role_copy_text:
         st.text_area("役職コピー用テキスト", st.session_state.role_copy_text, height=200)
-
