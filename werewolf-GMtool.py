@@ -3,17 +3,17 @@ import pandas as pd
 from secrets import SystemRandom
 
 # ──────────────────────────────────────────────────────────
-#  人狼GMアシストツール  ver.0.2（役職テーブル編集・お告げ除外フラグ 対応 / B案）
+#  人狼GMアシストツール  ver.0.3（役職編集B案 + 一括名前入力 + コピー用テキスト）
 #  author: ChatGPT (o3)
 # ──────────────────────────────────────────────────────────
 #  機能概要
 #  1. 参加者数（9〜11）入力
 #  2. 役職テーブル生成（固定3パターン）→ 行ごと編集（B案: 個別 TextInput + Checkbox）
-#  3. 参加者名入力欄を動的生成
+#  3. 参加者名「一括入力」＋「個別入力」
 #  4. 発言順割り当て（乱数A: 1〜1000）
 #  5. 役職割り当て（乱数B: 1〜2000, 乱数B 昇順で編集後テーブルからロール付与）
 #  6. お告げ決定（チェックONの役職を候補から除外してランダム選出）
-#  7. 進行状況を常に DataFrame で可視化
+#  7. 最終テーブル表示 + コピー用テキスト（発言順/役職）
 # ──────────────────────────────────────────────────────────
 
 rng = SystemRandom()
@@ -49,6 +49,13 @@ if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame()
 if "omen" not in st.session_state:
     st.session_state.omen = ""
+# 追加（旧版から統合）
+if "bulk_names" not in st.session_state:
+    st.session_state.bulk_names = ""
+if "order_copy_text" not in st.session_state:
+    st.session_state.order_copy_text = ""
+if "role_copy_text" not in st.session_state:
+    st.session_state.role_copy_text = ""
 
 # ─────────────────────
 # UI レイアウト
@@ -59,6 +66,19 @@ st.markdown(
     '<div style="font-size:0.9rem; opacity:0.8; margin-top:-0.6rem;">by <a href="https://x.com/Ascalaphidae" target="_blank">あすとらふぃーだ</a></div>',
     unsafe_allow_html=True,
 )
+
+# 全消去（旧版の初期化ボタンを統合）
+if st.button("入力内容の初期化", type="secondary"):
+    st.session_state.count = 9
+    st.session_state.roles = []
+    st.session_state.editable_roles = []
+    st.session_state.names = []
+    st.session_state.df = pd.DataFrame()
+    st.session_state.omen = ""
+    st.session_state.bulk_names = ""
+    st.session_state.order_copy_text = ""
+    st.session_state.role_copy_text = ""
+    st.rerun()
 
 # 1️⃣ 参加者数入力
 st.subheader("① 参加者数を入力")
@@ -80,7 +100,6 @@ with col2a:
         st.success("役職テーブルを読み込み、編集用リストを初期化しました！")
 with col2b:
     if st.button("役職テーブルを既定に戻す", key="reset_roles_default") and st.session_state.roles:
-        # 直前の人数のプリセットに戻す
         base = ROLE_TABLES[count]
         def _default_excluded(r: str) -> bool:
             return r in {"人狼A", "人狼B", "人狼C", "占い"}
@@ -120,20 +139,42 @@ if st.session_state.editable_roles:
         use_container_width=True,
     )
 else:
-    # プリセットの素テーブルだけでも表示
     if st.session_state.roles:
         st.dataframe(
             pd.DataFrame({"No": range(1, len(st.session_state.roles) + 1), "役職": st.session_state.roles}),
             use_container_width=True,
         )
 
-# 3️⃣ 参加者名入力欄の自動生成
-st.subheader("③ 参加者名を入力")
+# 3️⃣-1 参加者名を一括入力（旧版機能を統合：カンマ区切り）
+st.subheader("③-1 参加者名を一括入力（カンマ区切り）")
+st.session_state.bulk_names = st.text_input(
+    "例： あす, らふぃ, テレみ, はろ, しらつゆ",
+    value=st.session_state.bulk_names,
+    key="bulk_names_input",
+)
+if st.button("一括反映", key="apply_bulk_names"):
+    names = [n.strip() for n in st.session_state.bulk_names.split(",") if n.strip()]
+    # names を現在の人数に収まる範囲で適用
+    st.session_state.names = []
+    for i in range(count):
+        if i < len(names):
+            st.session_state.names.append(names[i])
+        else:
+            st.session_state.names.append(f"プレイヤー{i + 1}")
+    # 個別入力フィールドにも反映されるよう、既存の name_i に直接代入
+    for i, nm in enumerate(st.session_state.names):
+        st.session_state[f"name_{i}"] = nm
+    st.success("一括入力を反映しました。")
+
+# 3️⃣-2 参加者名の個別入力（人数ぶん生成）
+st.subheader("③-2 参加者名を個別入力")
 name_cols = st.columns((1, 1))
 st.session_state.names = []
 for i in range(count):
     with name_cols[i % 2]:
-        name = st.text_input(f"参加者 {i + 1}", key=f"name_{i}")
+        # 既に name_i に値がある場合はそれを初期値に使う
+        default_name = st.session_state.get(f"name_{i}", f"プレイヤー{i + 1}")
+        name = st.text_input(f"参加者 {i + 1}", value=default_name, key=f"name_{i}")
         st.session_state.names.append(name.strip() if name.strip() else f"プレイヤー{i + 1}")
 
 # DataFrame を確保（人数変化にも追随）
@@ -173,7 +214,6 @@ if st.button("発言順割り当て", key="set_order"):
 # 5️⃣ 役職割り当て（乱数B → 昇順 → 編集後テーブル上から配る）
 st.subheader("⑤ 役職を配る")
 if st.button("役職割り当て", key="set_roles_to_players"):
-    # 編集用テーブルの存在チェック
     if not st.session_state.editable_roles:
         st.error("先に『役職テーブル決定（プリセット読込）』で編集用リストを用意してね！")
     else:
@@ -212,6 +252,28 @@ if st.button("お告げ決定", key="set_omen"):
 if st.session_state.omen:
     st.info(f"**お告げ先（役職）** : {st.session_state.omen}")
 
-# 7️⃣ 最終テーブル表示
+# 7️⃣ 最終テーブル & コピー用テキスト
 st.subheader("最終テーブル")
 st.dataframe(st.session_state.df, use_container_width=True)
+
+if not st.session_state.df.empty and st.session_state.df["発言順"].iloc[0] != "":
+    # 現在の並び（発言順昇順）でコピー文面を作成
+    df_sorted = st.session_state.df.sort_values("発言順").reset_index(drop=True)
+    order_text = "
+".join(f"{row['発言順']}.{row['参加者名']}" for _, row in df_sorted.iterrows())
+    role_text = "
+".join(
+        f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}" for _, row in df_sorted.iterrows()
+    )
+    copy_col1, copy_col2 = st.columns(2)
+    with copy_col1:
+        if st.button("発言順をコピー用に生成"):
+            st.session_state.order_copy_text = order_text
+    with copy_col2:
+        if st.button("役職をコピー用に生成"):
+            st.session_state.role_copy_text = role_text
+
+    if st.session_state.order_copy_text:
+        st.text_area("発言順コピー用テキスト", st.session_state.order_copy_text, height=150)
+    if st.session_state.role_copy_text:
+        st.text_area("役職コピー用テキスト", st.session_state.role_copy_text, height=200)
