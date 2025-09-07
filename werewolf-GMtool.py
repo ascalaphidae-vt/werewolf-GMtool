@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # coding: utf-8
 """
-Streamlit app: 人狼GMアシストツール（ver.1.0 完全版）
+Streamlit app: 人狼GMアシストツール（安定版）
 - 参加者数（9〜11）
 - 役職テーブル（プリセット）→ 行ごと編集（テキスト＋お告げ除外チェック）
 - 参加者名：一括入力（カンマ区切り）＋個別入力
-- 発言順：乱数A(1-1000)で決定、スナップショット保存
-- 役職割当：乱数B(1-2000)で決定、編集後テーブル順に付与
+- 発言順：乱数A(1-1000)で決定、スナップショット保存（コピー時は読み取り専用）
+- 役職割当：乱数B(1-2000)で決定、編集後テーブル順に付与（表示は発言順スナップショットへ戻す）
 - お告げ：チェックONは除外、候補からランダム
-- コピー用テキスト：読み取り専用で生成（順番・割当を一切変更しない）
-- 乱数は SystemRandom を使用（偏り対策）
+- コピー用テキスト：DataFrameを一切変更せず生成（順番・割当は不変）
+- 乱数は SystemRandom を使用
 """
 
 import pandas as pd
@@ -24,7 +24,6 @@ ROLE_TABLES = {
     11: ["人狼A", "人狼B", "人狼C", "狂人", "占い", "霊媒", "二丁拳銃", "村人A", "村人B", "村人C", "村人D"],
 }
 
-
 # ──────────────────────────────────────────────────────────
 # SessionState 初期化
 # ──────────────────────────────────────────────────────────
@@ -32,24 +31,21 @@ def _init_state():
     ss = st.session_state
     ss.setdefault("count", 9)
     ss.setdefault("prev_count", 9)
-    ss.setdefault("roles", [])                 # プリセット原本（参照用）
-    ss.setdefault("editable_roles", [])        # [{No, role, omen_exclude}]
-    ss.setdefault("names", [])                 # 現在の名前入力（人数ぶん）
-    ss.setdefault("bulk_names", "")            # 一括入力の原文
-    ss.setdefault("df", pd.DataFrame())        # 進行テーブル
-    ss.setdefault("df_initialized", False)     # 不用意な再生成を防ぐ
-    ss.setdefault("order_snapshot", None)      # 発言順['01','02',...]のスナップショット
-    ss.setdefault("omen", "")                  # お告げの表示
-    ss.setdefault("order_copy_text", "")       # 発言順コピー用
-    ss.setdefault("role_copy_text", "")        # 役職コピー用
-
+    ss.setdefault("roles", [])
+    ss.setdefault("editable_roles", [])  # [{No, role, omen_exclude}]
+    ss.setdefault("names", [])
+    ss.setdefault("bulk_names", "")
+    ss.setdefault("df", pd.DataFrame())
+    ss.setdefault("df_initialized", False)
+    ss.setdefault("order_snapshot", None)      # ['01','02',...]
+    ss.setdefault("omen", "")
+    ss.setdefault("order_copy_text", "")
+    ss.setdefault("role_copy_text", "")
 
 def _default_excluded(role: str) -> bool:
     return role in {"人狼A", "人狼B", "人狼C", "占い"}
 
-
 _init_state()
-
 
 # ──────────────────────────────────────────────────────────
 # UI レイアウト
@@ -68,18 +64,16 @@ if st.button("入力内容の初期化", type="secondary"):
     _init_state()
     st.rerun()
 
-
 # ① 参加者数入力
 st.subheader("① 参加者数を入力")
 count = st.number_input("参加者数 (9〜11)", 9, 11, value=st.session_state["count"], key="count")
 
-# 参加者数変更への最小影響更新
+# 参加者数変更を検知して最小限の調整（順番は極力保持）
 if st.session_state["count"] != st.session_state["prev_count"]:
     old = st.session_state["prev_count"]
     new = st.session_state["count"]
-    st.session_state["prev_count"] = st.session_state["count"]
+    st.session_state["prev_count"] = new
 
-    # DF の行数を調整（順番や割当をなるべく保持）
     df = st.session_state["df"]
     if not df.empty:
         cur = len(df)
@@ -100,9 +94,8 @@ if st.session_state["count"] != st.session_state["prev_count"]:
     else:
         st.session_state["df_initialized"] = False
 
-    # 発言順スナップショットは無効化（再割当を促す）
+    # 発言順スナップショットは無効化（再割り当てを促す）
     st.session_state["order_snapshot"] = None
-
 
 # ② 役職テーブル決定 → 編集
 st.subheader("② 役職テーブル決定 → 編集")
@@ -113,7 +106,6 @@ if st.button("役職テーブル決定（プリセット読込）", key="set_rol
         for i, r in enumerate(st.session_state["roles"])
     ]
     st.success("役職テーブルを読み込みました")
-
 
 # 編集UI（B案：行ごと TextInput + Checkbox）
 if st.session_state["editable_roles"]:
@@ -131,7 +123,6 @@ if st.session_state["editable_roles"]:
     st.session_state["editable_roles"] = new_list
     st.dataframe(pd.DataFrame(st.session_state["editable_roles"]), use_container_width=True)
 
-
 # ③-1 参加者名一括入力
 st.subheader("③-1 参加者名を一括入力（カンマ区切り）")
 st.session_state["bulk_names"] = st.text_input(
@@ -147,7 +138,6 @@ if st.button("一括反映", key="apply_bulk_names"):
         st.session_state[f"name_{i}"] = st.session_state["names"][i]
     st.success("一括入力を反映しました")
 
-
 # ③-2 個別入力
 st.subheader("③-2 参加者名を個別入力")
 name_cols = st.columns((1, 1))
@@ -157,7 +147,6 @@ for i in range(count):
         default_name = st.session_state.get(f"name_{i}", f"プレイヤー{i+1}")
         name = st.text_input(f"参加者 {i+1}", value=default_name, key=f"name_{i}")
         st.session_state["names"].append(name.strip() if name.strip() else f"プレイヤー{i+1}")
-
 
 # DataFrame 確保（順番保護／最小変更）
 if not st.session_state["df_initialized"]:
@@ -187,13 +176,11 @@ else:
         df = pd.concat([df, add], ignore_index=True)
     elif cur > count:
         df = df.iloc[:count].copy().reset_index(drop=True)
-
     # 名前だけ最新に（行順は維持）
     if st.session_state["names"]:
         new_names = st.session_state["names"] + [f"プレイヤー{i+1}" for i in range(len(st.session_state["names"]), count)]
         df.loc[:count - 1, "参加者名"] = new_names[:count]
     st.session_state["df"] = df
-
 
 # ④ 発言順を決める（乱数A 昇順→01,02…）
 st.subheader("④ 発言順を決める")
@@ -205,7 +192,6 @@ if st.button("発言順割り当て", key="set_order"):
     st.session_state["df"] = df
     st.session_state["order_snapshot"] = df["発言順"].tolist()  # 並びを固定
     st.success("発言順を更新しました！")
-
 
 # ⑤ 役職を配る（乱数B 昇順→編集後テーブル順で配布→表示は発言順に戻す）
 st.subheader("⑤ 役職を配る")
@@ -233,7 +219,6 @@ if st.button("役職割り当て", key="set_roles_to_players"):
             st.session_state["df"] = df
             st.success("役職を割り当てました！")
 
-
 # ⑥ お告げ（チェックONは候補から除外）
 st.subheader("⑥ お告げを決定")
 if st.button("お告げ決定", key="set_omen"):
@@ -246,10 +231,8 @@ if st.button("お告げ決定", key="set_omen"):
         else:
             st.session_state["omen"] = rng.choice(candidates)
             st.success("お告げ先を決定しました！")
-
 if st.session_state["omen"]:
     st.info(f"**お告げ先（役職）** : {st.session_state['omen']}")
-
 
 # ⑦ 最終テーブル & コピー用テキスト（コピー時は読み取り専用でDFを変更しない）
 st.subheader("最終テーブル")
@@ -270,7 +253,7 @@ if not st.session_state["df"].empty and st.session_state["order_snapshot"] is no
     snap = st.session_state["order_snapshot"]
     df_sorted = st.session_state["df"].set_index("発言順").reindex(snap).reset_index()
 
-    # 改行を壊さない安全な生成（joinのセパレータを使わず、各行末に '\n' を直書き）
+    # 改行が壊れにくい生成方法（各行末に '\n' を付けて最後だけ除去）
     order_lines = [
         f"{row['発言順']}.{row['参加者名']}\n"
         for _, row in df_sorted.iterrows()
