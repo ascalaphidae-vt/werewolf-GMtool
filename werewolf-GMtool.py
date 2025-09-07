@@ -86,7 +86,7 @@ if st.session_state.editable_roles:
 
 # ③-1 一括入力
 st.subheader("③-1 参加者名を一括入力（カンマ区切り）")
-st.session_state.bulk_names = st.text_input("例： あす, らふぃ, テレみ", value=st.session_state.bulk_names, key="bulk_names_input")
+st.session_state.bulk_names = st.text_input("例： あおはだ,いしがけ,うすばき,えさきもんつの,おお,からす,きべり,くだまき,けぶか,こ", value=st.session_state.bulk_names, key="bulk_names_input")
 if st.button("一括反映", key="apply_bulk_names"):
     names = [n.strip() for n in st.session_state.bulk_names.split(",") if n.strip()]
     st.session_state.names = []
