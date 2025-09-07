@@ -211,6 +211,7 @@ if st.session_state.omen:
     st.info(f"**お告げ先（役職）** : {st.session_state.omen}")
 
 # ⑦ 最終テーブル & コピー用テキスト（コピー時は読み取り専用でDFを変更しない）
+# ※ このブロックはDFの並びや値を一切変更しない（コピー用文字列の生成のみ）
 st.subheader("最終テーブル")
 if not st.session_state.df.empty:
     if st.session_state.order_snapshot is not None and "発言順" in st.session_state.df.columns:
