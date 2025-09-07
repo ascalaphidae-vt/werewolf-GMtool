@@ -275,8 +275,7 @@ if (
     )
     role_text = "
 ".join(
-        f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}"
-        for _, row in df_sorted.iterrows()
+        f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}" for _, row in df_sorted.iterrows()
     )
     copy_col1, copy_col2 = st.columns(2)
     with copy_col1:
