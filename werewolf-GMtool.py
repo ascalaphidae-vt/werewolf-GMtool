@@ -3,7 +3,7 @@ import pandas as pd
 from secrets import SystemRandom
 
 # ──────────────────────────────────────────────────────────
-#  人狼GMアシストツール  ver.0.3.1（役職編集B案 + 一括名前入力 + コピー用テキスト／並び固定＆改行修正）
+#  人狼GMアシストツール  ver.0.3.2（役職編集B案 + 一括名前入力 + コピー用テキスト／並び固定＆改行修正）
 #  author: ChatGPT (o3)
 # ──────────────────────────────────────────────────────────
 #  機能概要
@@ -13,7 +13,7 @@ from secrets import SystemRandom
 #  4. 発言順割り当て（乱数A: 1〜1000）
 #  5. 役職割り当て（乱数B: 1〜2000, 乱数B 昇順で編集後テーブルからロール付与）
 #  6. お告げ決定（チェックONの役職を候補から除外してランダム選出）
-#  7. 最終テーブル表示（常に発言順で表示） + コピー用テキスト（発言順/役職／改行）
+#  7. 最終テーブル表示（常に発言順で表示） + コピー用テキスト（発言順/役職）
 # ──────────────────────────────────────────────────────────
 
 rng = SystemRandom()
@@ -49,7 +49,6 @@ if "df" not in st.session_state:
     st.session_state.df = pd.DataFrame()
 if "omen" not in st.session_state:
     st.session_state.omen = ""
-# 追加（旧版から統合）
 if "bulk_names" not in st.session_state:
     st.session_state.bulk_names = ""
 if "order_copy_text" not in st.session_state:
@@ -67,7 +66,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 全消去（旧版の初期化ボタンを統合）
+# 全消去（初期化ボタン）
 if st.button("入力内容の初期化", type="secondary"):
     st.session_state.count = 9
     st.session_state.roles = []
@@ -145,7 +144,7 @@ else:
             use_container_width=True,
         )
 
-# 3️⃣-1 参加者名を一括入力（旧版機能を統合：カンマ区切り）
+# 3️⃣-1 参加者名を一括入力（カンマ区切り）
 st.subheader("③-1 参加者名を一括入力（カンマ区切り）")
 st.session_state.bulk_names = st.text_input(
     "例： あす, らふぃ, テレみ, はろ, しらつゆ",
@@ -154,14 +153,12 @@ st.session_state.bulk_names = st.text_input(
 )
 if st.button("一括反映", key="apply_bulk_names"):
     names = [n.strip() for n in st.session_state.bulk_names.split(",") if n.strip()]
-    # names を現在の人数に収まる範囲で適用
     st.session_state.names = []
     for i in range(count):
         if i < len(names):
             st.session_state.names.append(names[i])
         else:
             st.session_state.names.append(f"プレイヤー{i + 1}")
-    # 個別入力フィールドにも反映されるよう、既存の name_i に直接代入
     for i, nm in enumerate(st.session_state.names):
         st.session_state[f"name_{i}"] = nm
     st.success("一括入力を反映しました。")
@@ -172,7 +169,6 @@ name_cols = st.columns((1, 1))
 st.session_state.names = []
 for i in range(count):
     with name_cols[i % 2]:
-        # 既に name_i に値がある場合はそれを初期値に使う
         default_name = st.session_state.get(f"name_{i}", f"プレイヤー{i + 1}")
         name = st.text_input(f"参加者 {i + 1}", value=default_name, key=f"name_{i}")
         st.session_state.names.append(name.strip() if name.strip() else f"プレイヤー{i + 1}")
@@ -189,7 +185,6 @@ if st.session_state.df.empty or len(st.session_state.df) != count:
         }
     )
 else:
-    # 名前は最新入力で常に更新
     st.session_state.df["参加者名"] = st.session_state.names
 
 # 4️⃣ 発言順割り当て（乱数A → 昇順 → 01,02…）
@@ -199,7 +194,6 @@ if st.button("発言順割り当て", key="set_order"):
     df = pd.DataFrame({"参加者名": st.session_state.names, "乱数A": randA})
     df = df.sort_values("乱数A").reset_index(drop=True)
     df["発言順"] = df.index.map(lambda x: f"{x + 1:02}")
-    # 既存の役職・乱数B は保持
     if "役職" in st.session_state.df.columns:
         df["役職"] = st.session_state.df["役職"]
     else:
@@ -217,7 +211,6 @@ if st.button("役職割り当て", key="set_roles_to_players"):
     if not st.session_state.editable_roles:
         st.error("先に『役職テーブル決定（プリセット読込）』で編集用リストを用意してね！")
     else:
-        # 役職名のバリデーション（空文字の検出）
         blanks = [r["No"] for r in st.session_state.editable_roles if not r["role"]]
         if blanks:
             st.error(f"役職名が未入力の行があります → No: {', '.join(map(str, blanks))}")
@@ -227,11 +220,9 @@ if st.button("役職割り当て", key="set_roles_to_players"):
             randB = [rng.randrange(1, 2001) for _ in range(count)]
             df = st.session_state.df.copy()
             df["乱数B"] = randB
-            # 乱数Bの小さい順に並べる
             df = df.sort_values("乱数B").reset_index(drop=True)
             assigned_roles = [row["role"] for row in st.session_state.editable_roles]
-            df["役職"] = assigned_roles  # 昇順で割付
-            # 表示は発言順に戻す
+            df["役職"] = assigned_roles
             df = df.sort_values("発言順").reset_index(drop=True)
             st.session_state.df = df
             st.success("役職を割り当てました！")
@@ -255,7 +246,6 @@ if st.session_state.omen:
 # 7️⃣ 最終テーブル（常に発言順で表示） & コピー用テキスト
 st.subheader("最終テーブル")
 
-# 表示は常に発言順で固定
 if not st.session_state.df.empty:
     if (st.session_state.df["発言順"] != "").any():
         df_view = st.session_state.df.sort_values("発言順").reset_index(drop=True)
@@ -263,7 +253,6 @@ if not st.session_state.df.empty:
         df_view = st.session_state.df.copy().reset_index(drop=True)
     st.dataframe(df_view, use_container_width=True)
 
-# 発言順が全行に割り当て済みならコピー用テキストを生成できる
 if (
     not st.session_state.df.empty
     and st.session_state.df["発言順"].ne("").all()
@@ -277,6 +266,7 @@ if (
 ".join(
         f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}" for _, row in df_sorted.iterrows()
     )
+
     copy_col1, copy_col2 = st.columns(2)
     with copy_col1:
         if st.button("発言順をコピー用に生成"):
