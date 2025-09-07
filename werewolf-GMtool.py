@@ -259,11 +259,12 @@ st.dataframe(st.session_state.df, use_container_width=True)
 if not st.session_state.df.empty and st.session_state.df["発言順"].iloc[0] != "":
     # 現在の並び（発言順昇順）でコピー文面を作成
     df_sorted = st.session_state.df.sort_values("発言順").reset_index(drop=True)
-    order_text = "
-".join(f"{row['発言順']}.{row['参加者名']}" for _, row in df_sorted.iterrows())
-    role_text = "
-".join(
-        f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}" for _, row in df_sorted.iterrows()
+    order_text = "\\n".join(
+        f"{row['発言順']}.{row['参加者名']}" for _, row in df_sorted.iterrows()
+    )
+    role_text = "\\n".join(
+        f"{row['発言順']}.{row['参加者名']}-{row['役職'] if row['役職'] else ''}"
+        for _, row in df_sorted.iterrows()
     )
     copy_col1, copy_col2 = st.columns(2)
     with copy_col1:
@@ -277,3 +278,4 @@ if not st.session_state.df.empty and st.session_state.df["発言順"].iloc[0] !=
         st.text_area("発言順コピー用テキスト", st.session_state.order_copy_text, height=150)
     if st.session_state.role_copy_text:
         st.text_area("役職コピー用テキスト", st.session_state.role_copy_text, height=200)
+
