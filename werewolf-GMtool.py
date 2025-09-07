@@ -164,10 +164,11 @@ def main() -> None:
     # ─────────────────────────────────
     # 3. 参加者名：一括入力
     # ─────────────────────────────────
-    st.subheader("3. 参加者名を一括入力")
+    st.subheader("③-1 参加者名を一括入力（カンマ区切り）")
     st.session_state.bulk_names = st.text_input(
-        "カンマ区切りで入力",
+        "例： あおはだ,いしがけ,うすばき,えさきもんつの,おお,からす,きべり,くだまき,けぶか",
         value=st.session_state.bulk_names,
+        key="bulk_names_input",
     )
     if st.button("反映"):
         names = [n.strip() for n in st.session_state.bulk_names.split(",") if n.strip()]
