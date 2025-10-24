@@ -66,11 +66,11 @@ def main() -> None:
     # ─────────────────────────────────
     # 1. 参加者数
     # ─────────────────────────────────
-    st.subheader("1. 参加者数の入力 (9～11人)")
+    st.subheader("1. 参加者数の入力 (9～13人)")
     st.session_state.num_players = st.number_input(
         "参加者数",
         min_value=9,
-        max_value=11,
+        max_value=13,
         step=1,
         value=st.session_state.num_players,
     )
@@ -118,11 +118,45 @@ def main() -> None:
                 "村人C",
                 "村人D",
             ]
+        if num == 12:
+            # ご指定の12人プリセット
+            return [
+                "人狼A",
+                "人狼B",
+                "人狼C",
+                "狂人",
+                "占い師",
+                "二丁拳銃",
+                "霊媒師",
+                "村人A",
+                "村人B",
+                "村人C",
+                "村人D",
+                "村人E",
+            ]
+        if num == 13:
+            # ご指定の13人プリセット
+            return [
+                "人狼A",
+                "人狼B",
+                "人狼C",
+                "狂人",
+                "占い師",
+                "騎士",
+                "霊媒師",
+                "村人A",
+                "村人B",
+                "村人C",
+                "村人D",
+                "村人E",
+                "村人F",
+            ]
         return []
 
     # お告げ除外の初期値ルール
     def default_omen_exclude(role: str) -> bool:
-        return role in {"人狼A", "人狼B", "人狼C", "占い"}
+        # 表記ゆれ対応：「占い」と「占い師」どちらも除外
+        return role in {"人狼A", "人狼B", "人狼C", "占い", "占い師"}
 
     # ─────────────────────────────────
     # 2. 役職テーブル決定 → 編集可能リスト化
@@ -235,9 +269,12 @@ def main() -> None:
         if st.session_state.editable_roles:
             candidates = [r["role"] for r in st.session_state.editable_roles if not r["omen_exclude"]]
         else:
-            # 編集機能が未使用なら、従来の除外ルール
+            # 編集機能が未使用なら、従来の除外ルール（表記ゆれ対応）
             if st.session_state.roles:
-                candidates = [r for r in st.session_state.roles if not (r.startswith("人狼") or r == "占い")]
+                candidates = [
+                    r for r in st.session_state.roles
+                    if not (r.startswith("人狼") or r in {"占い", "占い師"})
+                ]
 
         st.session_state.prophecy = random.choice(candidates) if candidates else ""
         if not candidates:
