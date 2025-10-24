@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 # coding: utf-8
-"""Streamlit app for assigning roles in a Werewolf game (役職編集つき)."""
+"""Streamlit app for assigning roles in a Werewolf game (役職編集つき, 9～13人対応)。
+- 参加者数: 9～13人
+- 一括入力の「反映」が効かない問題を修正（ウィジェットstateも更新）
+- 12人/13人のデフォルト役職テーブルを指定どおり追加
+- お告げ除外の初期設定：人狼A/B/Cと占い/占い師を除外
+"""
 
+import re
 import random
 import pandas as pd
 import streamlit as st
@@ -119,7 +125,7 @@ def main() -> None:
                 "村人D",
             ]
         if num == 12:
-            # ご指定の12人プリセット
+            # 指定の12人プリセット
             return [
                 "人狼A",
                 "人狼B",
@@ -135,7 +141,7 @@ def main() -> None:
                 "村人E",
             ]
         if num == 13:
-            # ご指定の13人プリセット
+            # 指定の13人プリセット
             return [
                 "人狼A",
                 "人狼B",
@@ -204,11 +210,20 @@ def main() -> None:
         value=st.session_state.bulk_names,
         key="bulk_names_input",
     )
+
     if st.button("反映"):
-        names = [n.strip() for n in st.session_state.bulk_names.split(",") if n.strip()]
-        for idx, name in enumerate(names):
-            if idx < len(st.session_state.players):
-                st.session_state.players[idx] = name
+        raw = st.session_state.bulk_names.strip()
+        # 半角カンマ, 全角コンマ（，）, 全角読点（、）, 改行 を区切りとして許可
+        parts = [s for s in re.split(r"[,\uFF0C\u3001\n]+", raw) if s.strip()]
+        names = [p.strip() for p in parts][:13]     # 最大13名まで
+        names += [""] * (13 - len(names))           # 足りない分は空欄でパディング
+
+        # データ本体と、ウィジェット側の両方に反映（ここがポイント）
+        for idx in range(13):
+            st.session_state.players[idx] = names[idx]
+            st.session_state[f"player_{idx}"] = names[idx]
+
+        st.success(f"{sum(1 for n in names if n)}名を反映しました")
 
     # ─────────────────────────────────
     # 4. 参加者名：個別入力（常時13枠）
